@@ -3,7 +3,6 @@ torch
 torchvision
 torchaudio
 numpy
-opencv-python
 pillow
 matplotlib
 timm
@@ -11,4 +10,4 @@ plotly
 pandas
 scikit-learn
 grad-cam
-opencv-python-headless
+opencv-python
