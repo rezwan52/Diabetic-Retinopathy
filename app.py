@@ -1,15 +1,20 @@
 import streamlit as st
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torchvision import models, transforms as T
 from PIL import Image
 import timm
+import numpy as np
+import plotly.express as px
+import cv2
 
-# ---------- CONFIG ----------
+# ---------------- CONFIG ----------------
 IMG_SIZE = 304
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# ---------- HybridModel ----------
+
+# ---------------- HybridModel ----------------
 class HybridModel(nn.Module):
     def __init__(self, freeze_backbones=False):
         super().__init__()
@@ -56,18 +61,18 @@ class HybridModel(nn.Module):
         logit = self.head(z).squeeze(1)
         return logit
 
-# ---------- Model load ----------
+# ---------------- Model load ----------------
 @st.cache_resource
 def load_model():
     model = HybridModel().to(device)
-    checkpoint = torch.load("checkpoints/best_aptos.pt", map_location=device)
-    # checkpoint dict
+    checkpoint_path = "checkpoints/best_aptos.pt"
+    checkpoint = torch.load(checkpoint_path, map_location=device)
     if isinstance(checkpoint, dict) and "state_dict" in checkpoint:
         model.load_state_dict(checkpoint["state_dict"])
     model.eval()
     return model
 
-# ---------- Image preprocessing ----------
+# ---------------- Image preprocessing ----------------
 def preprocess_image(image):
     tfm = T.Compose([
         T.Resize((IMG_SIZE, IMG_SIZE)),
@@ -76,12 +81,54 @@ def preprocess_image(image):
     ])
     return tfm(image).unsqueeze(0).to(device)
 
-# ---------- Streamlit UI ----------
-st.title("🩺 Diabetic Retinopathy Detection (APTOS)")
+# ---------------- Grad-CAM ----------------
+class GradCAM:
+    def __init__(self, model: nn.Module, target_layer: nn.Module):
+        self.model = model
+        self.tlayer = target_layer
+        self.grads = None; self.acts = None
+        self.fh = self.tlayer.register_forward_hook(self._fwd)
+        self.bh = self.tlayer.register_full_backward_hook(self._bwd)
+    def _fwd(self, m, i, o): self.acts = o
+    def _bwd(self, m, gi, go): self.grads = go[0]
+    def __call__(self, x):
+        self.model.zero_grad(set_to_none=True)
+        logits = self.model(x)
+        score = torch.sigmoid(logits).mean()
+        score.backward(retain_graph=True)
+        w = self.grads.mean(dim=(2,3), keepdim=True)
+        cam = (self.acts * w).sum(dim=1, keepdim=True)
+        cam = F.relu(cam)
+        cam = F.interpolate(cam, x.shape[2:], mode="bilinear", align_corners=False)
+        cam = (cam - cam.min()) / (cam.max() - cam.min() + 1e-8)
+        return cam.detach().cpu()
+    def close(self):
+        self.fh.remove(); self.bh.remove()
+
+# ---------------- Interactive overlay ----------------
+def interactive_gradcam(model, image):
+    input_tensor = preprocess_image(image)
+    target_layer = model.resnet.layer4[-1].conv2
+    cam_engine = GradCAM(model, target_layer)
+    input_tensor.requires_grad_(True)
+    cam = cam_engine(input_tensor).squeeze().cpu().numpy()
+    cam_engine.close()
+
+    # Resize cam to original image
+    cam_resized = cv2.resize(cam, (image.width, image.height))
+    fig = px.imshow(cam_resized, color_continuous_scale="Jet", origin="upper")
+    fig.update_layout(coloraxis_colorbar=dict(title="Attention"), margin=dict(l=0,r=0,t=0,b=0))
+    return fig, cam_resized
+
+# ---------------- Streamlit UI ----------------
+st.title("🩺 Diabetic Retinopathy Detection With Explainable-AI")
+
+# Model selection
+model_choice = st.radio("Select Model", ["APTOS 2019", "Bangladeshi DR"])
+model_type = "aptos" if model_choice=="APTOS 2019" else "bd"
 
 uploaded_file = st.file_uploader("Upload a retina image", type=["jpg","jpeg","png"])
-
-if uploaded_file is not None:
+if uploaded_file:
     image = Image.open(uploaded_file).convert("RGB")
     st.image(image, caption="Uploaded Image", use_container_width=True)
 
@@ -90,10 +137,76 @@ if uploaded_file is not None:
 
     with torch.no_grad():
         output = model(input_tensor)
-        pred = (torch.sigmoid(output) >= 0.5).long().item()
         prob = torch.sigmoid(output).item()
+        pred = (prob >= 0.5)
 
+     # Display prediction + confidence
     if pred == 0:
-        st.success(f"✅ No Diabetic Retinopathy detected (Confidence: {prob*100:.2f}%)")
+        healthy_conf = (1 - prob) * 100
+        st.success(f"✅ No Diabetic Retinopathy detected (Confidence: {healthy_conf:.2f}%)")
+        st.markdown(f"""
+        **Explanation:** মডেল বলছে retina তে কোন DR নেই।  
+        Confidence মানে, model কতটা নিশ্চিত যে retina তে DR নেই।  
+        DR probability: {prob*100:.2f}% → Healthy confidence: {healthy_conf:.2f}%
+        """)
     else:
-        st.error(f"⚠️ Diabetic Retinopathy detected (Confidence: {prob*100:.2f}%)")
+        dr_conf = prob * 100
+        st.error(f"⚠️ Diabetic Retinopathy detected (Confidence: {dr_conf:.2f}%)")
+        st.markdown(f"""
+        **Explanation:** মডেল বলছে retina তে Diabetic Retinopathy আছে।  
+        Confidence মানে, model কতটা নিশ্চিত যে retina তে DR আছে।  
+        DR probability: {dr_conf:.2f}%
+        """)
+
+    # Interactive Grad-CAM
+    st.subheader("Grad-CAM")
+    fig, cam_resized = interactive_gradcam(model, image)
+    st.plotly_chart(fig, use_container_width=True)
+
+    # Hover explanation
+    st.markdown("""
+    **Hover Explanation:**  
+    - 🔴 High attention: model DR detect করার জন্য সবচেয়ে বেশি focus করেছে  
+    - 🟠 Medium attention: model moderate focus  
+    - 🟢 Low attention: model কম focus করেছে  
+    """)
+
+     # ---------------- Health Advice ----------------
+    st.subheader("Medical Advice / Next Steps")
+    if pred == 1:
+        st.warning("""
+        মডেল বলছে DR detect হয়েছে।  
+        ✅ পরবর্তী পদক্ষেপ:
+        1. Retina specialist দেখানো
+        2. Regular eye check-up
+        3. Blood sugar ও BP control
+        4. Doctor নির্দেশ অনুযায়ী medication / laser / injection
+        5. Healthy lifestyle বজায় রাখা
+        """)
+    else:
+        st.info("""
+        মডেল বলছে DR detect হয়নি।  
+        ✅ Preventive measures:
+        1. Diabetes থাকলে yearly eye check-up
+        2. Sugar, BP, cholesterol control
+        3. Balanced diet + exercise
+        4. Smoking & alcohol limited
+        """)
+
+    # ---------------- Grad-CAM explanation ----------------
+    st.subheader("Prediction Explanation")
+    if pred == 1:
+        st.markdown("""
+        মডেল DR detect করেছে।  
+        Grad-CAM overlay এ লাল অংশগুলো দেখাচ্ছে retina তে যেসব region model সবচেয়ে বেশি focus করেছে।  
+        এই region গুলোতে অস্বাভাবিক blood vessels, microaneurysms বা hemorrhages থাকতে পারে।  
+        অর্থাৎ মডেল বলছে এই অংশের কারণে DR detect হয়েছে।  
+        Color intensity (>0.7 high, 0.3-0.7 medium, <0.3 low) ব্যবহার করে user বুঝতে পারবে কোন region বেশি গুরুত্বপূর্ণ।
+        """)
+    else:
+        st.markdown("""
+        মডেল বলছে DR detect হয়নি।  
+        Grad-CAM overlay এ কোনো prominent hotspot নেই।  
+        Model normal retina texture এবং vessels pattern দেখে healthy verdict দিয়েছে।  
+        Color intensity hints দেখাবে model কোথায় বেশি বা কম focus করেছে।
+        """)
