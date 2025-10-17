@@ -62,15 +62,44 @@ class HybridModel(nn.Module):
         return logit
 
 # ---------------- Model load ----------------
+import streamlit as st
+import torch
+import os
+
+# device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 @st.cache_resource
 def load_model():
+    """
+    Load a PyTorch model with two checkpoints: best_aptos.pt and best_bd.pt
+    """
     model = HybridModel().to(device)
-    checkpoint_path = "checkpoints/best_aptos.pt"
-    checkpoint = torch.load(checkpoint_path, map_location=device)
-    if isinstance(checkpoint, dict) and "state_dict" in checkpoint:
-        model.load_state_dict(checkpoint["state_dict"])
+
+    # Load first checkpoint (best_aptos)
+    checkpoint_path1 = os.path.join("checkpoints", "best_aptos.pt")
+    if not os.path.exists(checkpoint_path1):
+        st.error(f"Checkpoint not found: {checkpoint_path1}")
+        st.stop()
+    checkpoint1 = torch.load(checkpoint_path1, map_location=device)
+    if isinstance(checkpoint1, dict) and "state_dict" in checkpoint1:
+        model.load_state_dict(checkpoint1["state_dict"])
+    elif isinstance(checkpoint1, dict):
+        model.load_state_dict(checkpoint1)
+
+    # Load second checkpoint (best_bd)
+    checkpoint_path2 = os.path.join("checkpoints", "best_bd.pt")
+    if not os.path.exists(checkpoint_path2):
+        st.error(f"Checkpoint not found: {checkpoint_path2}")
+        st.stop()
+    checkpoint2 = torch.load(checkpoint_path2, map_location=device)
+    if isinstance(checkpoint2, dict) and "state_dict" in checkpoint2:
+        model.load_state_dict(checkpoint2["state_dict"])
+    elif isinstance(checkpoint2, dict):
+        model.load_state_dict(checkpoint2)
+
     model.eval()
     return model
+
 
 # ---------------- Image preprocessing ----------------
 def preprocess_image(image):
