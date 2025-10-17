@@ -72,36 +72,26 @@ import os
 # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 @st.cache_resource
-def load_model():
-    """
-    Load a PyTorch model with two checkpoints: best_aptos.pt and best_bd.pt
-    """
+def load_model(model_type="aptos"):
     model = HybridModel().to(device)
+    if model_type == "aptos":
+        checkpoint_path = "checkpoints/best_aptos.pt"
+    else:
+        checkpoint_path = "checkpoints/best_bd.pt"
 
-    # Load first checkpoint (best_aptos)
-    checkpoint_path1 = os.path.join("checkpoints", "best_aptos.pt")
-    if not os.path.exists(checkpoint_path1):
-        st.error(f"Checkpoint not found: {checkpoint_path1}")
+    if not os.path.exists(checkpoint_path):
+        st.error(f"Checkpoint not found: {checkpoint_path}")
         st.stop()
-    checkpoint1 = torch.load(checkpoint_path1, map_location=device)
-    if isinstance(checkpoint1, dict) and "state_dict" in checkpoint1:
-        model.load_state_dict(checkpoint1["state_dict"])
-    elif isinstance(checkpoint1, dict):
-        model.load_state_dict(checkpoint1)
-
-    # Load second checkpoint (best_bd)
-    checkpoint_path2 = os.path.join("checkpoints", "best_bd.pt")
-    if not os.path.exists(checkpoint_path2):
-        st.error(f"Checkpoint not found: {checkpoint_path2}")
-        st.stop()
-    checkpoint2 = torch.load(checkpoint_path2, map_location=device)
-    if isinstance(checkpoint2, dict) and "state_dict" in checkpoint2:
-        model.load_state_dict(checkpoint2["state_dict"])
-    elif isinstance(checkpoint2, dict):
-        model.load_state_dict(checkpoint2)
+    
+    checkpoint = torch.load(checkpoint_path, map_location=device)
+    if isinstance(checkpoint, dict) and "state_dict" in checkpoint:
+        model.load_state_dict(checkpoint["state_dict"])
+    elif isinstance(checkpoint, dict):
+        model.load_state_dict(checkpoint)
 
     model.eval()
     return model
+
 
 
 # ---------------- Image preprocessing ----------------
@@ -160,85 +150,93 @@ model_choice = st.radio("Select Model", ["APTOS 2019", "Bangladeshi DR"])
 model_type = "aptos" if model_choice=="APTOS 2019" else "bd"
 
 uploaded_file = st.file_uploader("Upload a retina image", type=["jpg","jpeg","png"])
+
 if uploaded_file:
+    # Load and show the image
     image = Image.open(uploaded_file).convert("RGB")
     st.image(image, caption="Uploaded Image", use_container_width=True)
 
-    model = load_model()
+    # Load model based on selection
+    model = load_model(model_type)
+
+    # Preprocess image
     input_tensor = preprocess_image(image)
 
+    # Make prediction
     with torch.no_grad():
         output = model(input_tensor)
         prob = torch.sigmoid(output).item()
-        pred = (prob >= 0.5)
+        pred = (prob >= 0.5)  # ✅ pred is defined here
 
-     # Display prediction + confidence
+    # ---------------- Display prediction + confidence ----------------
     if pred == 0:
         healthy_conf = (1 - prob) * 100
         st.success(f"✅ No Diabetic Retinopathy detected (Confidence: {healthy_conf:.2f}%)")
         st.markdown(f"""
-        **Explanation:** মডেল বলছে retina তে কোন DR নেই।  
-        Confidence মানে, model কতটা নিশ্চিত যে retina তে DR নেই।  
-        DR probability: {prob*100:.2f}% → Healthy confidence: {healthy_conf:.2f}%
+        **Explanation:**  
+        - The model predicts the retina is healthy.  
+        - DR probability: {prob*100:.2f}%  
+        - Confidence of being healthy: {healthy_conf:.2f}%
         """)
     else:
         dr_conf = prob * 100
         st.error(f"⚠️ Diabetic Retinopathy detected (Confidence: {dr_conf:.2f}%)")
         st.markdown(f"""
-        **Explanation:** মডেল বলছে retina তে Diabetic Retinopathy আছে।  
-        Confidence মানে, model কতটা নিশ্চিত যে retina তে DR আছে।  
-        DR probability: {dr_conf:.2f}%
+        **Explanation:**  
+        - The model predicts the presence of Diabetic Retinopathy.  
+        - DR probability: {dr_conf:.2f}%
         """)
 
-    # Interactive Grad-CAM
-    st.subheader("Grad-CAM")
+    # ---------------- Grad-CAM ----------------
+    st.subheader("Grad-CAM Visualization")
     fig, cam_resized = interactive_gradcam(model, image)
     st.plotly_chart(fig, use_container_width=True)
 
-    # Hover explanation
     st.markdown("""
-    **Hover Explanation:**  
-    - 🔴 High attention: model DR detect করার জন্য সবচেয়ে বেশি focus করেছে  
-    - 🟠 Medium attention: model moderate focus  
-    - 🟢 Low attention: model কম focus করেছে  
+    **Attention Map Guide:**  
+    - 🔴 High attention: Areas where the model focused most to detect DR  
+    - 🟠 Medium attention: Areas with moderate focus  
+    - 🟢 Low attention: Areas with minimal focus  
     """)
 
-     # ---------------- Health Advice ----------------
+    # ---------------- Health Advice ----------------
     st.subheader("Medical Advice / Next Steps")
     if pred == 1:
         st.warning("""
-        মডেল বলছে DR detect হয়েছে।  
-        ✅ পরবর্তী পদক্ষেপ:
-        1. Retina specialist দেখানো
-        2. Regular eye check-up
-        3. Blood sugar ও BP control
-        4. Doctor নির্দেশ অনুযায়ী medication / laser / injection
-        5. Healthy lifestyle বজায় রাখা
+        **Diabetic Retinopathy Detected. Recommended Steps:**  
+        1. Consult a retina specialist.  
+        2. Schedule regular eye check-ups.  
+        3. Control blood sugar and blood pressure.  
+        4. Follow doctor's advice regarding medication, laser, or injections.  
+        5. Maintain a healthy lifestyle.
         """)
     else:
         st.info("""
-        মডেল বলছে DR detect হয়নি।  
-        ✅ Preventive measures:
-        1. Diabetes থাকলে yearly eye check-up
-        2. Sugar, BP, cholesterol control
-        3. Balanced diet + exercise
-        4. Smoking & alcohol limited
+        **No Diabetic Retinopathy Detected. Preventive Measures:**  
+        1. Annual eye check-up if diabetic.  
+        2. Maintain proper control of sugar, blood pressure, and cholesterol.  
+        3. Follow a balanced diet and exercise regularly.  
+        4. Limit smoking and alcohol consumption.
         """)
 
-    # ---------------- Grad-CAM explanation ----------------
+    # ---------------- Grad-CAM Explanation ----------------
     st.subheader("Prediction Explanation")
     if pred == 1:
         st.markdown("""
-        মডেল DR detect করেছে।  
-        Grad-CAM overlay এ লাল অংশগুলো দেখাচ্ছে retina তে যেসব region model সবচেয়ে বেশি focus করেছে।  
-        এই region গুলোতে অস্বাভাবিক blood vessels, microaneurysms বা hemorrhages থাকতে পারে।  
-        অর্থাৎ মডেল বলছে এই অংশের কারণে DR detect হয়েছে।  
-        Color intensity (>0.7 high, 0.3-0.7 medium, <0.3 low) ব্যবহার করে user বুঝতে পারবে কোন region বেশি গুরুত্বপূর্ণ।
+        - The model detected Diabetic Retinopathy.  
+        - Grad-CAM highlights (red regions) indicate the areas the model focused on the most.  
+        - These regions may contain abnormal blood vessels, microaneurysms, or hemorrhages.  
+        - Color intensity guide:  
+          - High (>0.7) → Most important regions  
+          - Medium (0.3–0.7) → Moderately important regions  
+          - Low (<0.3) → Less important regions
         """)
     else:
         st.markdown("""
-        মডেল বলছে DR detect হয়নি।  
-        Grad-CAM overlay এ কোনো prominent hotspot নেই।  
-        Model normal retina texture এবং vessels pattern দেখে healthy verdict দিয়েছে।  
-        Color intensity hints দেখাবে model কোথায় বেশি বা কম focus করেছে।
+        - The model predicts a healthy retina.  
+        - Grad-CAM overlay shows no prominent hotspots.  
+        - The model focused on normal retina textures and vessel patterns.  
+        - Color intensity hints indicate where the model paid more or less attention.
         """)
+
+
