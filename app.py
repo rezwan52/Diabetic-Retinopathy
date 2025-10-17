@@ -9,6 +9,12 @@ import numpy as np
 import plotly.express as px
 import cv2
 
+import streamlit as st
+import cv2
+
+st.write("✅ OpenCV version:", cv2.__version__)
+
+
 # ---------------- CONFIG ----------------
 IMG_SIZE = 304
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
