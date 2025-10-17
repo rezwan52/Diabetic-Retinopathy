@@ -1,0 +1,75 @@
+# ------------------------
+# Python
+# ------------------------
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+build/
+dist/
+.eggs/
+*.manifest
+*.spec
+
+# ------------------------
+# Virtual Environment
+# ------------------------
+venv/
+.env/
+.venv/
+env/
+ENV/
+
+# ------------------------
+# Jupyter / Notebooks
+# ------------------------
+.ipynb_checkpoints/
+*.ipynb~
+
+# ------------------------
+# Logs and temp files
+# ------------------------
+*.log
+*.tmp
+*.bak
+*.swp
+.DS_Store
+Thumbs.db
+
+# ------------------------
+# PyTorch / Checkpoints / Weights
+# ------------------------
+checkpoints/
+*.pt
+*.pth
+*.ckpt
+
+# ------------------------
+# Streamlit cache
+# ------------------------
+.streamlit/
+.cache/
+.cache_dir/
+
+# ------------------------
+# VSCode / IDE
+# ------------------------
+.vscode/
+.idea/
+
+# ------------------------
+# OS Specific
+# ------------------------
+desktop.ini
+
+# ------------------------
+# Data folders (if you store images locally)
+# ------------------------
+data/
+datasets/
+inputs/
+outputs/
+runs/
