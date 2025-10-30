@@ -154,7 +154,8 @@ uploaded_file = st.file_uploader("Upload a retina image", type=["jpg","jpeg","pn
 if uploaded_file:
     # Load and show the image
     image = Image.open(uploaded_file).convert("RGB")
-    st.image(image, caption="Uploaded Image", use_container_width=True)
+    st.image(image, caption="Uploaded Image", width='stretch')
+
 
     # Load model based on selection
     model = load_model(model_type)
@@ -190,7 +191,7 @@ if uploaded_file:
     # ---------------- Grad-CAM ----------------
     st.subheader("Grad-CAM Visualization")
     fig, cam_resized = interactive_gradcam(model, image)
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
 
     st.markdown("""
     **Attention Map Guide:**  
