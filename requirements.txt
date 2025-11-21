@@ -12,4 +12,4 @@ scikit-learn
 grad-cam
 opencv-python-headless==4.7.0.72
 streamlit==1.51.0
-
+gdown

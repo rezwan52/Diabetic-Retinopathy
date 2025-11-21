@@ -8,14 +8,12 @@ import timm
 import numpy as np
 import plotly.express as px
 import cv2
-
-
-
+import os
+import gdown
 
 # ---------------- CONFIG ----------------
 IMG_SIZE = 304
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
 
 # ---------------- HybridModel ----------------
 class HybridModel(nn.Module):
@@ -64,26 +62,41 @@ class HybridModel(nn.Module):
         logit = self.head(z).squeeze(1)
         return logit
 
-# ---------------- Model load ----------------
-import streamlit as st
-import torch
-import os
+# ---------------- Model Checkpoints ----------------
+APTOS_FILE_ID = "1AbYG8x_rrgqDer9HvhUOULdNpcR_pTvt"
+BD_FILE_ID   = "1X0laRqSQTiB5dh14ja_xQa4cxlDrtWDG"
 
-# device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# ---------------- Helper Functions ----------------
+def is_valid_pt(file_path):
+    """Check if the file is a valid PyTorch checkpoint."""
+    try:
+        with open(file_path, "rb") as f:
+            magic = f.read(2)
+        return magic == b'\x80\x04'  # PyTorch pickle magic
+    except:
+        return False
 
+# ---------------- Load Model ----------------
 @st.cache_resource
 def load_model(model_type="aptos"):
     model = HybridModel().to(device)
-    if model_type == "aptos":
-        checkpoint_path = "checkpoints/best_aptos.pt"
-    else:
-        checkpoint_path = "checkpoints/best_bd.pt"
 
-    if not os.path.exists(checkpoint_path):
-        st.error(f"Checkpoint not found: {checkpoint_path}")
-        st.stop()
-    
-    checkpoint = torch.load(checkpoint_path, map_location=device)
+    if model_type == "aptos":
+        checkpoint_path = "best_aptos.pt"
+        file_id = APTOS_FILE_ID
+    else:
+        checkpoint_path = "best_bd.pt"
+        file_id = BD_FILE_ID
+
+    # Download if missing or invalid
+    if not os.path.exists(checkpoint_path) or not is_valid_pt(checkpoint_path):
+        st.info(f"Downloading model ({checkpoint_path}) from Google Drive...")
+        url = f"https://drive.google.com/uc?id={file_id}"
+        gdown.download(url, checkpoint_path, quiet=False)
+
+    # Load checkpoint safely
+    checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
+
     if isinstance(checkpoint, dict) and "state_dict" in checkpoint:
         model.load_state_dict(checkpoint["state_dict"])
     elif isinstance(checkpoint, dict):
@@ -92,9 +105,7 @@ def load_model(model_type="aptos"):
     model.eval()
     return model
 
-
-
-# ---------------- Image preprocessing ----------------
+# ---------------- Image Preprocessing ----------------
 def preprocess_image(image):
     tfm = T.Compose([
         T.Resize((IMG_SIZE, IMG_SIZE)),
@@ -127,7 +138,7 @@ class GradCAM:
     def close(self):
         self.fh.remove(); self.bh.remove()
 
-# ---------------- Interactive overlay ----------------
+# ---------------- Interactive Grad-CAM ----------------
 def interactive_gradcam(model, image):
     input_tensor = preprocess_image(image)
     target_layer = model.resnet.layer4[-1].conv2
@@ -136,7 +147,6 @@ def interactive_gradcam(model, image):
     cam = cam_engine(input_tensor).squeeze().cpu().numpy()
     cam_engine.close()
 
-    # Resize cam to original image
     cam_resized = cv2.resize(cam, (image.width, image.height))
     fig = px.imshow(cam_resized, color_continuous_scale="Jet", origin="upper")
     fig.update_layout(coloraxis_colorbar=dict(title="Attention"), margin=dict(l=0,r=0,t=0,b=0))
@@ -145,48 +155,33 @@ def interactive_gradcam(model, image):
 # ---------------- Streamlit UI ----------------
 st.title("🩺 Diabetic Retinopathy Detection With Explainable-AI")
 
-# Model selection
 model_choice = st.radio("Select Model", ["APTOS 2019", "Bangladeshi DR"])
 model_type = "aptos" if model_choice=="APTOS 2019" else "bd"
 
 uploaded_file = st.file_uploader("Upload a retina image", type=["jpg","jpeg","png"])
 
 if uploaded_file:
-    # Load and show the image
     image = Image.open(uploaded_file).convert("RGB")
     st.image(image, caption="Uploaded Image", width='stretch')
 
-
-    # Load model based on selection
     model = load_model(model_type)
 
-    # Preprocess image
     input_tensor = preprocess_image(image)
 
-    # Make prediction
     with torch.no_grad():
         output = model(input_tensor)
         prob = torch.sigmoid(output).item()
-        pred = (prob >= 0.5)  # ✅ pred is defined here
+        pred = (prob >= 0.5)
 
-    # ---------------- Display prediction + confidence ----------------
+    # ---------------- Prediction Display ----------------
     if pred == 0:
         healthy_conf = (1 - prob) * 100
         st.success(f"✅ No Diabetic Retinopathy detected (Confidence: {healthy_conf:.2f}%)")
-        st.markdown(f"""
-        **Explanation:**  
-        - The model predicts the retina is healthy.  
-        - DR probability: {prob*100:.2f}%  
-        - Confidence of being healthy: {healthy_conf:.2f}%
-        """)
+        st.markdown(f"**DR probability:** {prob*100:.2f}%, **Healthy confidence:** {healthy_conf:.2f}%")
     else:
         dr_conf = prob * 100
         st.error(f"⚠️ Diabetic Retinopathy detected (Confidence: {dr_conf:.2f}%)")
-        st.markdown(f"""
-        **Explanation:**  
-        - The model predicts the presence of Diabetic Retinopathy.  
-        - DR probability: {dr_conf:.2f}%
-        """)
+        st.markdown(f"**DR probability:** {dr_conf:.2f}%")
 
     # ---------------- Grad-CAM ----------------
     st.subheader("Grad-CAM Visualization")
@@ -232,12 +227,11 @@ if uploaded_file:
           - Medium (0.3–0.7) → Moderately important regions  
           - Low (<0.3) → Less important regions
         """)
+       
     else:
         st.markdown("""
         - The model predicts a healthy retina.  
         - Grad-CAM overlay shows no prominent hotspots.  
-        - The model focused on normal retina textures and vessel patterns.  
+        - The model focused on normal retina textures and vessel patterns.
         - Color intensity hints indicate where the model paid more or less attention.
         """)
-
-
