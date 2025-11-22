@@ -2,7 +2,7 @@ streamlit
 torch
 torchvision
 torchaudio
-numpy<2.0
+numpy
 pillow
 matplotlib
 timm
@@ -12,4 +12,4 @@ scikit-learn
 grad-cam
 streamlit==1.51.0
 gdown
-opencv-python-headless
+opencv-python-headless==4.8.1.78
