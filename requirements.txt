@@ -10,6 +10,5 @@ plotly
 pandas
 scikit-learn
 grad-cam
-streamlit==1.51.0
 gdown
 opencv-python-headless==4.8.1.78
