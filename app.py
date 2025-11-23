@@ -1,3 +1,14 @@
+# ---------------- Safe OpenCV Import ----------------
+try:
+    import cv2
+    cv2.setNumThreads(0)
+except ImportError:
+    import sys
+    import subprocess
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "opencv-python-headless"])
+    import cv2
+    cv2.setNumThreads(0)
+
 import os
 
 os.environ["LD_PRELOAD"] = ""
