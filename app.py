@@ -1,6 +1,7 @@
 import os
-os.environ["OPENCV_VIDEOIO_PRIORITY_MSMF"] = "0"
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
+os.environ["MPLBACKEND"] = "Agg"
+
 
 
 import streamlit as st
@@ -16,6 +17,7 @@ import plotly.express as px
 
 import cv2
 cv2.setNumThreads(0)
+
 
 import os
 import gdown

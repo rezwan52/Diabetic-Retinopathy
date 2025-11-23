@@ -1,14 +1,14 @@
+opencv-python-headless==4.8.1.78
+numpy==1.26.4
 streamlit
 torch
 torchvision
 torchaudio
-numpy==1.26.4
 pillow
 matplotlib
-timm
 plotly
+timm
 pandas
 scikit-learn
 grad-cam
 gdown
-opencv-python-headless==4.8.1.78
