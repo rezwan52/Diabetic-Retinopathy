@@ -12,9 +12,11 @@ from PIL import Image
 import timm
 import numpy as np
 import plotly.express as px
-cv2.setNumThreads(0)
+
 
 import cv2
+cv2.setNumThreads(0)
+
 import os
 import gdown
 
