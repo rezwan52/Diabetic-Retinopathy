@@ -1,9 +1,13 @@
 import os
+
 os.environ["LD_PRELOAD"] = ""
+os.environ["LIBGL_ALWAYS_INDIRECT"] = "1"
 os.environ["LIBGL_ALWAYS_SOFTWARE"] = "1"
-os.environ["OPENCV_VIDEOIO_PRIORITY_MSMF"] = "0"
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
 os.environ["MPLBACKEND"] = "Agg"
+os.environ["SDL_VIDEODRIVER"] = "dummy"
+os.environ["OPENCV_VIDEOIO_PRIORITY_MSMF"] = "0"
+
 
 
 
