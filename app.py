@@ -1,3 +1,8 @@
+import os
+os.environ["OPENCV_VIDEOIO_PRIORITY_MSMF"] = "0"
+os.environ["QT_QPA_PLATFORM"] = "offscreen"
+
+
 import streamlit as st
 import torch
 import torch.nn as nn
@@ -7,6 +12,8 @@ from PIL import Image
 import timm
 import numpy as np
 import plotly.express as px
+cv2.setNumThreads(0)
+
 import cv2
 import os
 import gdown
