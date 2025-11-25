@@ -208,11 +208,21 @@ if uploaded_file:
     if pred == 0:
         healthy_conf = (1 - prob) * 100
         st.success(f"✅ No Diabetic Retinopathy detected (Confidence: {healthy_conf:.2f}%)")
-        st.markdown(f"**DR probability:** {prob*100:.2f}%, **Healthy confidence:** {healthy_conf:.2f}%")
+        st.markdown(
+        f"**DR probability:** {prob*100:.2f}%\n\n"
+        f"**Explanation:** The model predicts this retina image as healthy with high confidence. "
+        f"The probability of DR presence is low ({prob*100:.2f}%), meaning the model is {healthy_conf:.2f}% confident that the image is normal."
+    )
     else:
         dr_conf = prob * 100
         st.error(f"⚠️ Diabetic Retinopathy detected (Confidence: {dr_conf:.2f}%)")
-        st.markdown(f"**DR probability:** {dr_conf:.2f}%")
+        st.markdown(
+        f"**DR probability:** {prob*100:.2f}%\n\n"
+        f"**Explanation:** The model predicts this retina image has Diabetic Retinopathy with high confidence. "
+        f"The probability of DR presence is {prob*100:.2f}%, meaning the model is {dr_conf:.2f}% confident that disease is present. "
+        f"Grad-CAM visualization highlights the regions the model focused on for this prediction."
+    )
+
 
     # ---------------- Grad-CAM ----------------
     st.subheader("Grad-CAM Visualization")
