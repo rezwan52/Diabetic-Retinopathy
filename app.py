@@ -1,3 +1,6 @@
+import streamlit as st
+
+
 try:
     import cv2
     cv2.setNumThreads(0)
