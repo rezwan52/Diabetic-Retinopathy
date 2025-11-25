@@ -6,7 +6,7 @@ try:
     cv2.setNumThreads(0)
 except Exception as e:
     cv2 = None
-    st.error("OpenCV failed to load. Please check requirements.txt")
+    st.error("OpenCV failed to load. Please check now requirements.txt")
     st.write(e)
     st.stop()
 
