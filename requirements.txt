@@ -12,4 +12,4 @@ scikit-learn
 grad-cam
 gdown
 tensorflow==2.14.0
-opencv-python-headless==4.10.0.84
+opencv-python-headless==4.9.0.80

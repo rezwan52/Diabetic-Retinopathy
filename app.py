@@ -1,13 +1,11 @@
-# ---------------- Safe OpenCV Import ----------------
 try:
     import cv2
     cv2.setNumThreads(0)
-except ImportError:
-    import sys
-    import subprocess
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "opencv-python-headless"])
-    import cv2
-    cv2.setNumThreads(0)
+except Exception as e:
+    cv2 = None
+    st.error("OpenCV failed to load. Please check requirements.txt")
+    st.write(e)
+    st.stop()
 
 import os
 
